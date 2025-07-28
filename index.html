@@ -31,6 +31,33 @@ font-weight: bold;
 color: #7c3aed;
 margin-bottom: 15px;
 }
+.score-display {
+text-align: center;
+margin-bottom: 20px;
+}
+.score-text {
+font-size: 1.3rem;
+font-weight: bold;
+color: #374151;
+background: #f3f4f6;
+padding: 10px 20px;
+border-radius: 15px;
+display: inline-block;
+}
+.progress-bar {
+width: 100%;
+height: 20px;
+background: #e5e7eb;
+border-radius: 10px;
+margin: 15px 0;
+overflow: hidden;
+}
+.progress-fill {
+height: 100%;
+background: linear-gradient(90deg, #10b981, #34d399);
+transition: width 0.5s ease;
+border-radius: 10px;
+}
 .problem-area {
 background: white;
 padding: 30px;
@@ -67,6 +94,17 @@ font-weight: bold;
 padding: 15px 25px;
 border-radius: 25px;
 animation: pulse 1s infinite;
+}
+.clear-message {
+background: linear-gradient(135deg, #fbbf24, #f59e0b);
+color: white;
+font-size: 2.5rem;
+font-weight: bold;
+padding: 30px 40px;
+border-radius: 25px;
+animation: bounce 1s infinite;
+text-align: center;
+box-shadow: 0 10px 25px rgba(251, 191, 36, 0.5);
 }
 .total-display {
 text-align: center;
@@ -234,12 +272,26 @@ color: white;
 .btn-new:hover {
 background: #2563eb;
 }
+.btn-reset {
+background: #ec4899;
+color: white;
+}
+.btn-reset:hover {
+background: #db2777;
+}
 .confetti {
 position: fixed;
 width: 16px;
 height: 16px;
 border-radius: 50%;
 animation: ping 2s infinite;
+z-index: 1000;
+pointer-events: none;
+}
+.star {
+position: fixed;
+font-size: 2rem;
+animation: star-fall 3s linear infinite;
 z-index: 1000;
 pointer-events: none;
 }
@@ -259,12 +311,28 @@ transform: scale(2);
 opacity: 0;
 }
 }
+@keyframes star-fall {
+0% {
+transform: translateY(-100vh) rotate(0deg);
+opacity: 1;
+}
+100% {
+transform: translateY(100vh) rotate(360deg);
+opacity: 0;
+}
+}
 </style>
 </head>
 <body>
 <div class="container">
 <div class="header">
 <h1 class="title">１０よりおおきいかず４</h1>
+</div>
+<div class="score-display">
+<div class="score-text" id="scoreText">せいかいした かず: 0 / 5</div>
+<div class="progress-bar">
+<div class="progress-fill" id="progressFill" style="width: 0%"></div>
+</div>
 </div>
 <div class="problem-area">
 <div class="message-area" id="messageArea"></div>
@@ -285,8 +353,9 @@ opacity: 0;
 <span style="font-size: 1.5rem; font-weight: bold; color: #374151;">こ</span>
 </div>
 <div class="buttons">
-<button class="btn btn-check" onclick="checkAnswer()">✓ こたえを かくにん</button>
-<button class="btn btn-new" onclick="generateNewProblem()">✨ あたらしい もんだい</button>
+<button class="btn btn-check" id="checkBtn" onclick="checkAnswer()">✓ こたえを かくにん</button>
+<button class="btn btn-new" id="newBtn" onclick="generateNewProblem()">✨ あたらしい もんだい</button>
+<button class="btn btn-reset" id="resetBtn" onclick="resetGame()" style="display: none;">🔄 はじめから</button>
 </div>
 </div>
 </div>
@@ -296,11 +365,32 @@ let hiddenType = 'tens'; // 'tens' または 'ones'
 let hiddenCount = 0;
 let correctAnswer = 0;
 let isCorrect = false;
+let correctCount = 0; // 正解数をカウント
+let isGameCleared = false; // ゲームクリア状態
+let hiddenTenGroup = 'left'; // 20の場合、どちらの10を隠すか（'left' または 'right'）
+
+function updateScoreDisplay() {
+const scoreText = document.getElementById('scoreText');
+const progressFill = document.getElementById('progressFill');
+
+scoreText.textContent = `せいかいした かず: ${correctCount} / 5`;
+const progressPercentage = (correctCount / 5) * 100;
+progressFill.style.width = progressPercentage + '%';
+}
 
 function generateRandomProblem() {
+if (isGameCleared) return;
+
 // 11～20の数をランダム生成
 totalNumber = Math.floor(Math.random() * 10) + 11;
-// 10の位か1の位のどちらかをランダムに隠す
+
+if (totalNumber === 20) {
+// 20の場合は、左右どちらかの10を隠す
+hiddenType = 'tens';
+hiddenTenGroup = Math.random() < 0.5 ? 'left' : 'right';
+correctAnswer = 10;
+} else {
+// 11～19の場合は従来通り
 hiddenType = Math.random() < 0.5 ? 'tens' : 'ones';
 const tens = Math.floor(totalNumber / 10);
 const ones = totalNumber % 10;
@@ -311,6 +401,8 @@ correctAnswer = hiddenCount;
 hiddenCount = ones;
 correctAnswer = hiddenCount;
 }
+}
+
 document.getElementById('totalNumber').textContent = totalNumber;
 document.getElementById('answerInput').value = '';
 isCorrect = false;
@@ -323,6 +415,84 @@ const container = document.getElementById('blocksDisplay');
 container.innerHTML = '';
 const tens = Math.floor(totalNumber / 10);
 const ones = totalNumber % 10;
+
+// 20の場合は特別な2列レイアウト
+if (totalNumber === 20) {
+createTwentyLayout(container);
+} else {
+createNormalLayout(container, tens, ones);
+}
+}
+
+function createTwentyLayout(container) {
+// 20の場合：10のブロックを2列に分けて表示
+// 左側の10
+const leftContainer = document.createElement('div');
+leftContainer.className = 'blocks-container';
+
+if (hiddenType === 'tens' && hiddenTenGroup === 'left' && !isCorrect) {
+// 左側の10を隠す
+const hiddenColumn = document.createElement('div');
+hiddenColumn.className = 'hidden-column';
+const questionMark = document.createElement('div');
+questionMark.className = 'question-mark';
+questionMark.textContent = '？';
+hiddenColumn.appendChild(questionMark);
+leftContainer.appendChild(hiddenColumn);
+} else {
+// 左側の10を表示
+const blocksGroup = document.createElement('div');
+blocksGroup.className = 'blocks-group';
+const leftColumn = document.createElement('div');
+leftColumn.className = 'blocks-column';
+for (let i = 0; i < 10; i++) {
+const tenUnitBlock = document.createElement('div');
+tenUnitBlock.className = 'ten-unit-block';
+const unit = document.createElement('div');
+unit.className = 'ten-unit';
+tenUnitBlock.appendChild(unit);
+leftColumn.appendChild(tenUnitBlock);
+}
+blocksGroup.appendChild(leftColumn);
+leftContainer.appendChild(blocksGroup);
+}
+container.appendChild(leftContainer);
+
+// 右側の10
+const rightContainer = document.createElement('div');
+rightContainer.className = 'blocks-container';
+
+if (hiddenType === 'tens' && hiddenTenGroup === 'right' && !isCorrect) {
+// 右側の10を隠す
+const hiddenColumn = document.createElement('div');
+hiddenColumn.className = 'hidden-column';
+const questionMark = document.createElement('div');
+questionMark.className = 'question-mark';
+questionMark.textContent = '？';
+hiddenColumn.appendChild(questionMark);
+rightContainer.appendChild(hiddenColumn);
+} else {
+// 右側の10を表示
+const blocksGroup = document.createElement('div');
+blocksGroup.className = 'blocks-group';
+const rightColumn = document.createElement('div');
+rightColumn.className = 'blocks-column';
+for (let i = 0; i < 10; i++) {
+const tenUnitBlock = document.createElement('div');
+tenUnitBlock.className = 'ten-unit-block';
+const unit = document.createElement('div');
+unit.className = 'ten-unit';
+tenUnitBlock.appendChild(unit);
+rightColumn.appendChild(tenUnitBlock);
+}
+blocksGroup.appendChild(rightColumn);
+rightContainer.appendChild(blocksGroup);
+}
+container.appendChild(rightContainer);
+}
+
+function createNormalLayout(container, tens, ones) {
+// 通常のレイアウト（11-19）
 // 10の位の列
 const tensContainer = document.createElement('div');
 tensContainer.className = 'blocks-container';
@@ -355,6 +525,7 @@ blocksGroup.appendChild(tensColumn);
 tensContainer.appendChild(blocksGroup);
 }
 container.appendChild(tensContainer);
+
 // 1の位の列
 const onesContainer = document.createElement('div');
 onesContainer.className = 'blocks-container';
@@ -397,6 +568,8 @@ return String.fromCharCode(s.charCodeAt(0) - 0xFEE0);
 }
 
 function checkAnswer() {
+if (isGameCleared) return;
+
 let userInput = document.getElementById('answerInput').value;
 // 全角数字を半角に変換
 userInput = convertToHalfWidth(userInput);
@@ -408,12 +581,24 @@ return;
 }
 if (userAnswer === correctAnswer) {
 isCorrect = true;
+correctCount++;
+updateScoreDisplay();
 createBlocksDisplay(); // 正解後にブロックを表示
+
+if (correctCount >= 5) {
+// ゲームクリア
+isGameCleared = true;
+showGameClearMessage();
+document.getElementById('checkBtn').style.display = 'none';
+document.getElementById('newBtn').style.display = 'none';
+document.getElementById('resetBtn').style.display = 'inline-block';
+} else {
 showSuccessMessage();
 setTimeout(() => {
 hideMessage();
 generateNewProblem();
 }, 2000);
+}
 } else {
 showMessage('😔 もういちど、かんがえましょう', 'error');
 setTimeout(hideMessage, 2000);
@@ -437,9 +622,33 @@ confetti.remove();
 }
 }
 
+function showGameClearMessage() {
+showMessage('🌟 おめでとう！ ゲーム クリア！ 🌟<br>とても よく できました！', 'clear');
+
+// 星の雨エフェクト
+for (let i = 0; i < 20; i++) {
+const star = document.createElement('div');
+star.className = 'star';
+star.textContent = '⭐';
+star.style.left = Math.random() * 100 + 'vw';
+star.style.animationDelay = Math.random() * 3 + 's';
+document.body.appendChild(star);
+setTimeout(() => {
+star.remove();
+}, 3000);
+}
+}
+
 function showMessage(text, type) {
 const messageArea = document.getElementById('messageArea');
-const className = type === 'success' ? 'success-message' : 'error-message';
+let className = '';
+if (type === 'success') {
+className = 'success-message';
+} else if (type === 'clear') {
+className = 'clear-message';
+} else {
+className = 'error-message';
+}
 messageArea.innerHTML = `<div class="message ${className}">${text}</div>`;
 }
 
@@ -449,11 +658,24 @@ messageArea.innerHTML = '';
 }
 
 function generateNewProblem() {
+if (!isGameCleared) {
+generateRandomProblem();
+}
+}
+
+function resetGame() {
+correctCount = 0;
+isGameCleared = false;
+updateScoreDisplay();
+document.getElementById('checkBtn').style.display = 'inline-block';
+document.getElementById('newBtn').style.display = 'inline-block';
+document.getElementById('resetBtn').style.display = 'none';
 generateRandomProblem();
 }
 
 // 初期化
 window.onload = function() {
+updateScoreDisplay();
 generateRandomProblem();
 };
 </script>
